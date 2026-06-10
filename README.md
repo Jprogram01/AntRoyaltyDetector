@@ -1,6 +1,19 @@
+---
+title: Ant Royalty Detector
+emoji: 🐜
+colorFrom: purple
+colorTo: yellow
+sdk: docker
+app_port: 8000
+pinned: false
+license: mit
+---
+
 # Ant Royalty Detector
 
 Binary image classifier that distinguishes **ant queens from workers** using transfer learning on AntWeb specimen photographs. Built as a production-grade ML Engineering portfolio project.
+
+> **Live demo:** this repo doubles as a [Hugging Face Space](https://huggingface.co) — the YAML header above configures it. Open the Space URL to upload an ant photo and get a queen/worker prediction in the browser.
 
 ## Why this is interesting
 
