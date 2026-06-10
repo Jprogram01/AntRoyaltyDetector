@@ -1,0 +1,30 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+
+# Data & checkpoints (large blobs)
+data/raw/
+data/processed/
+data/hymenoptera_data/
+data/hymenoptera_data.zip
+data/Sorted/
+data/sorted/
+data/manifest.json
+checkpoints/
+*.pt
+*.pth
+
+# Logs
+logs/
+*.log
+
+# Jupyter
+.ipynb_checkpoints/
