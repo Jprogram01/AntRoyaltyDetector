@@ -25,6 +25,7 @@ COPY --chown=user . .
 ENV MODEL_PATH=checkpoints/combined_final.pt
 ENV DEVICE=cpu
 
-EXPOSE 8000
+# Hugging Face Spaces route to port 7860
+EXPOSE 7860
 
-CMD ["uvicorn", "serve.app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "serve.app:app", "--host", "0.0.0.0", "--port", "7860"]
