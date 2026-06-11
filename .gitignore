@@ -1,3 +1,6 @@
+# Local Claude Code project brief (contains personal context — never commit)
+CLAUDE.md
+
 __pycache__/
 *.pyc
 *.pyo
