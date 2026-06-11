@@ -13,7 +13,7 @@ license: mit
 
 Binary image classifier that distinguishes 1. Ants from non-ants and 2. Ant queens from workers using transfer learning on AntWeb & iNaturalist specimen photographs. Built as a production-grade ML Engineering portfolio project.
 
-> **Live demo:** this repo doubles as a [Hugging Face Space](https://huggingface.co) — the YAML header above configures it. Open the Space URL to upload an ant photo and get a queen/worker prediction in the browser.
+> **Live demo:** this repo doubles as a [Hugging Face Space](https://huggingface.co/spaces/Jprogram01/ant-royalty-detector) — the YAML header above configures it. Open the Space URL to upload an ant photo and get a queen/worker prediction in the browser.
 
 ## Why?
 
