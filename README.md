@@ -11,13 +11,23 @@ license: mit
 
 # Ant Royalty Detector
 
-Binary image classifier that distinguishes **ant queens from workers** using transfer learning on AntWeb specimen photographs. Built as a production-grade ML Engineering portfolio project.
+Binary image classifier that distinguishes 1. Ants from non-ants and 2. Ant queens from workers using transfer learning on AntWeb & iNaturalist specimen photographs. Built as a production-grade ML Engineering portfolio project.
 
 > **Live demo:** this repo doubles as a [Hugging Face Space](https://huggingface.co) — the YAML header above configures it. Open the Space URL to upload an ant photo and get a queen/worker prediction in the browser.
 
-## Why this is interesting
+## Why?
 
-Queen/worker classification is understudied in the literature — existing ant datasets are mostly species-level or single-class "ant" detection. AntWeb is the only large-scale caste-labeled source, and the queen/worker split is heavily skewed toward workers. The engineering story is: **build the data pipeline, fix the imbalance, serve it properly**.
+Within the antkeeping world there is a common problem for new antkeepers: Correctly identifying if an ant is a queen ant. While there are physical traits that allow for more experienced antkeepers to quickly identify queen ants those can be hard to spot for beginners. The goal of this tool is to help newcomers to the antkeeping world in identifying queens.
+
+## Problems
+
+There were no datasets that classified ant caste, as well as a data imbalance problems in the available ant image datasets. This then meant a dataset had to be made manually by me. The data imbalance problems can cause problems in model training, but this can be mitigated during training by tactics such as class weighting.
+
+## AI Disclaimer 
+
+The system design, data selection/labeling, class imbalance decisions, deployment were all decided and handled by me, but Claude Code wrote the code and implemented the solutions. Much of this README was also written by Claude Code. I wanted to develop an ML project from idea to deployment while also familiarizing myself with AI tools. 
+
+
 
 ## Architecture
 
@@ -162,7 +172,7 @@ EfficientNet-B2, 14 epochs, RTX 3050 Ti (4GB) with mixed-precision (AMP).
 | Queen P / R / F1 | 0.90 / 0.91 / 0.91 |
 | Worker P / R / F1 | 0.94 / 0.93 / 0.94 |
 
-The headline: **despite a 1.5:1 class imbalance, queen recall is 0.91** — the
+**despite a 1.5:1 class imbalance, queen recall is 0.91** — the
 `WeightedRandomSampler` keeps the model from neglecting the scarce class. Val
 AUC climbed 0.78 (frozen) → 0.90 (epoch 6 unfreeze) → 0.974 (final).
 
