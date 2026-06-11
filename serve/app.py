@@ -3,6 +3,7 @@ FastAPI inference server for AntCasteClassifier.
 
 GET  /          — interactive upload page (browser demo)
 POST /predict   — upload an image, get queen/worker prediction + confidence
+POST /feedback  — user rates a prediction; image + label saved for retraining
 GET  /health    — liveness probe
 GET  /metrics   — Prometheus metrics (via prometheus-fastapi-instrumentator)
 """
@@ -13,7 +14,7 @@ import time
 from pathlib import Path
 
 import torch
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from loguru import logger
 from PIL import Image
@@ -22,6 +23,7 @@ from pydantic import BaseModel
 
 from data.dataset import VAL_TRANSFORMS
 from model.classifier import AntCasteClassifier
+from serve import storage
 
 MODEL_PATH = Path(os.getenv("MODEL_PATH", "checkpoints/combined_final.pt"))
 DEVICE = os.getenv("DEVICE", "cpu")
@@ -54,6 +56,7 @@ async def startup_event():
         logger.info("Model loaded and ready.")
     except RuntimeError as e:
         logger.warning(f"Model not pre-loaded at startup: {e}")
+    storage.init()
 
 
 class PredictionResponse(BaseModel):
@@ -83,6 +86,11 @@ _LANDING_HTML = """<!doctype html>
   img#preview { max-width: 100%; border-radius: 8px; margin-top: 1rem; display: none; }
   .bar { height: 10px; background: #8883; border-radius: 5px; overflow: hidden; margin-top:.5rem; }
   .bar > span { display:block; height:100%; background:#6d28d9; }
+  #rate { margin-top: 1.25rem; display:none; }
+  #rate .q { font-size:.95rem; margin-bottom:.5rem; }
+  .rbtn { background:#0000; border:1px solid #8886; color:inherit; margin-right:.5rem; }
+  .disclaimer { font-size:.78rem; color:#999; margin-top:.6rem; }
+  #thanks { color:#16a34a; font-weight:600; margin-top:.5rem; display:none; }
 </style></head>
 <body>
   <h1>🐜 Ant Royalty Detector</h1>
@@ -92,27 +100,53 @@ _LANDING_HTML = """<!doctype html>
     <button id="go" disabled>Classify</button>
     <img id="preview">
     <div id="result"></div>
+    <div id="rate">
+      <div class="q">Was this right?</div>
+      <button class="rbtn" id="yes">👍 Correct</button>
+      <button class="rbtn" id="no">👎 It's the other one</button>
+      <div class="disclaimer">By rating, you agree your uploaded image and label
+        may be stored and used to improve the model.</div>
+      <div id="thanks">✓ Thanks — saved for future training!</div>
+    </div>
   </div>
   <p class="sub">EfficientNet-B2 · trained on AntWeb + field images · <a href="/docs">API docs</a></p>
 <script>
 const fileEl=document.getElementById('file'), go=document.getElementById('go'),
-      res=document.getElementById('result'), prev=document.getElementById('preview');
+      res=document.getElementById('result'), prev=document.getElementById('preview'),
+      rate=document.getElementById('rate'), thanks=document.getElementById('thanks'),
+      yes=document.getElementById('yes'), no=document.getElementById('no');
+let lastCaste=null;
 fileEl.onchange=()=>{ go.disabled=!fileEl.files.length; res.innerHTML='';
+  rate.style.display='none'; thanks.style.display='none';
   if(fileEl.files.length){ prev.src=URL.createObjectURL(fileEl.files[0]); prev.style.display='block'; } };
 go.onclick=async()=>{
-  go.disabled=true; res.textContent='Classifying…';
+  go.disabled=true; res.textContent='Classifying…'; rate.style.display='none'; thanks.style.display='none';
   const fd=new FormData(); fd.append('file', fileEl.files[0]);
   try{
     const r=await fetch('/predict',{method:'POST',body:fd});
     if(!r.ok){ res.textContent='Error: '+(await r.json()).detail; go.disabled=false; return; }
     const d=await r.json(); const pct=(d.queen_probability*100).toFixed(1);
+    lastCaste=d.caste;
     res.innerHTML=`<div class="caste ${d.caste}">${d.caste.toUpperCase()}</div>`+
       `confidence ${(d.confidence*100).toFixed(1)}% · P(queen)=${pct}%`+
       `<div class="bar"><span style="width:${pct}%"></span></div>`+
       `<div class="sub">${d.latency_ms.toFixed(0)} ms</div>`;
+    yes.disabled=no.disabled=false; rate.style.display='block';
   }catch(e){ res.textContent='Request failed: '+e; }
   go.disabled=false;
 };
+async function sendFeedback(correct){
+  yes.disabled=no.disabled=true;
+  const fd=new FormData();
+  fd.append('file', fileEl.files[0]);
+  fd.append('predicted_caste', lastCaste);
+  fd.append('correct_caste', correct ? lastCaste : (lastCaste==='queen'?'worker':'queen'));
+  fd.append('consent', 'true');
+  try{ await fetch('/feedback',{method:'POST',body:fd}); thanks.style.display='block'; }
+  catch(e){ thanks.textContent='Could not save feedback.'; thanks.style.display='block'; }
+}
+yes.onclick=()=>sendFeedback(true);
+no.onclick=()=>sendFeedback(false);
 </script>
 </body></html>"""
 
@@ -155,9 +189,52 @@ async def predict(file: UploadFile = File(...)):
         f"latency={latency_ms:.1f}ms | file={file.filename}"
     )
 
+    # Monitoring log — metadata only, NO image (drift / volume / latency)
+    storage.log_prediction(
+        {
+            "caste": caste,
+            "queen_probability": round(queen_prob, 4),
+            "confidence": round(confidence, 4),
+            "latency_ms": round(latency_ms, 2),
+            "img_w": img.width,
+            "img_h": img.height,
+        }
+    )
+
     return PredictionResponse(
         caste=caste,
         confidence=round(confidence, 4),
         queen_probability=round(queen_prob, 4),
         latency_ms=round(latency_ms, 2),
     )
+
+
+@app.post("/feedback")
+async def feedback(
+    file: UploadFile = File(...),
+    predicted_caste: str = Form(...),
+    correct_caste: str = Form(...),
+    consent: bool = Form(...),
+):
+    """
+    Record a user's rating of a prediction. The image + corrected label are
+    saved to the feedback dataset (retraining corpus) ONLY with explicit consent.
+    `correct_caste` is what the user says it actually is (queen/worker).
+    """
+    if not consent:
+        raise HTTPException(status_code=400, detail="Consent required to store feedback")
+    if correct_caste not in ("queen", "worker"):
+        raise HTTPException(status_code=400, detail="correct_caste must be queen or worker")
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+
+    contents = await file.read()
+    fb_id = storage.save_feedback(
+        contents,
+        {
+            "predicted_caste": predicted_caste,
+            "correct_caste": correct_caste,
+            "agreed": predicted_caste == correct_caste,
+        },
+    )
+    return {"status": "thanks", "id": fb_id}

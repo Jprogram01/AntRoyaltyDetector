@@ -16,6 +16,7 @@ pandas>=2.2.0
 fastapi>=0.110.0
 uvicorn[standard]>=0.27.0
 python-multipart>=0.0.9
+huggingface_hub>=0.23.0
 
 # Logging / monitoring
 loguru>=0.7.2
