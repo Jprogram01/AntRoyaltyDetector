@@ -23,7 +23,7 @@ from pydantic import BaseModel
 
 from data.dataset import VAL_TRANSFORMS
 from model.classifier import AntCasteClassifier
-from serve import storage
+from serve import ood, storage
 
 MODEL_PATH = Path(os.getenv("MODEL_PATH", "checkpoints/combined_final.pt"))
 DEVICE = os.getenv("DEVICE", "cpu")
@@ -56,6 +56,7 @@ async def startup_event():
         logger.info("Model loaded and ready.")
     except RuntimeError as e:
         logger.warning(f"Model not pre-loaded at startup: {e}")
+    ood.warmup()
     storage.init()
 
 
@@ -64,6 +65,8 @@ class PredictionResponse(BaseModel):
     confidence: float
     queen_probability: float
     latency_ms: float
+    likely_ant: bool
+    ant_likelihood: float
 
 
 _LANDING_HTML = """<!doctype html>
@@ -91,6 +94,8 @@ _LANDING_HTML = """<!doctype html>
   .rbtn { background:#0000; border:1px solid #8886; color:inherit; margin-right:.5rem; }
   .disclaimer { font-size:.78rem; color:#999; margin-top:.6rem; }
   #thanks { color:#16a34a; font-weight:600; margin-top:.5rem; display:none; }
+  .notant { background:#f59e0b22; border:1px solid #f59e0b88; color:#b45309;
+            border-radius:8px; padding:.6rem .8rem; margin-bottom:.75rem; font-size:.95rem; }
 </style></head>
 <body>
   <h1>🐜 Ant Royalty Detector</h1>
@@ -136,10 +141,15 @@ go.onclick=async()=>{
     if(!r.ok){ res.textContent='Error: '+(await r.json()).detail; go.disabled=false; return; }
     const d=await r.json(); const pct=(d.queen_probability*100).toFixed(1);
     lastCaste=d.caste;
-    res.innerHTML=`<div class="caste ${d.caste}">${d.caste.toUpperCase()}</div>`+
+    const warn = d.likely_ant ? '' :
+      `<div class="notant">⚠️ This doesn't look like an ant (arthropod score `+
+      `${(d.ant_likelihood*100).toFixed(0)}%). The caste prediction below is `+
+      `probably unreliable.</div>`;
+    res.innerHTML=warn+
+      `<div class="caste ${d.caste}">${d.caste.toUpperCase()}</div>`+
       `confidence ${(d.confidence*100).toFixed(1)}% · P(queen)=${pct}%`+
       `<div class="bar"><span style="width:${pct}%"></span></div>`+
-      `<div class="sub">${d.latency_ms.toFixed(0)} ms</div>`;
+      `<div class="sub">${d.latency_ms.toFixed(0)} ms · arthropod ${(d.ant_likelihood*100).toFixed(0)}%</div>`;
     yes.disabled=no.disabled=false; rate.style.display='block';
   }catch(e){ res.textContent='Request failed: '+e; }
   go.disabled=false;
@@ -193,18 +203,24 @@ async def predict(file: UploadFile = File(...)):
     caste = "queen" if queen_prob >= 0.5 else "worker"
     confidence = queen_prob if caste == "queen" else 1.0 - queen_prob
 
+    # OOD gate: is this even an ant? (soft — caste is still returned)
+    likely_ant, ant_likelihood = ood.check(img)
+
     logger.info(
         f"predict | caste={caste} | queen_prob={queen_prob:.4f} | "
+        f"likely_ant={likely_ant} ({ant_likelihood}) | "
         f"latency={latency_ms:.1f}ms | file={file.filename}"
     )
 
-    # Monitoring log — metadata only, NO image (drift / volume / latency)
+    # Monitoring log — metadata only, NO image (drift / volume / latency / OOD)
     storage.log_prediction(
         {
             "caste": caste,
             "queen_probability": round(queen_prob, 4),
             "confidence": round(confidence, 4),
             "latency_ms": round(latency_ms, 2),
+            "likely_ant": likely_ant,
+            "ant_likelihood": ant_likelihood,
             "img_w": img.width,
             "img_h": img.height,
         }
@@ -215,6 +231,8 @@ async def predict(file: UploadFile = File(...)):
         confidence=round(confidence, 4),
         queen_probability=round(queen_prob, 4),
         latency_ms=round(latency_ms, 2),
+        likely_ant=likely_ant,
+        ant_likelihood=ant_likelihood,
     )
 
 
