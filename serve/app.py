@@ -98,6 +98,7 @@ _LANDING_HTML = """<!doctype html>
   <div class="card">
     <input type="file" id="file" accept="image/*">
     <button id="go" disabled>Classify</button>
+    <div class="sub" style="margin-top:.4rem">…or paste an image (Ctrl/⌘+V)</div>
     <img id="preview">
     <div id="result"></div>
     <div id="rate">
@@ -115,13 +116,21 @@ const fileEl=document.getElementById('file'), go=document.getElementById('go'),
       res=document.getElementById('result'), prev=document.getElementById('preview'),
       rate=document.getElementById('rate'), thanks=document.getElementById('thanks'),
       yes=document.getElementById('yes'), no=document.getElementById('no');
-let lastCaste=null;
-fileEl.onchange=()=>{ go.disabled=!fileEl.files.length; res.innerHTML='';
+let lastCaste=null, currentFile=null;
+function setImage(file){
+  currentFile=file||null; go.disabled=!currentFile; res.innerHTML='';
   rate.style.display='none'; thanks.style.display='none';
-  if(fileEl.files.length){ prev.src=URL.createObjectURL(fileEl.files[0]); prev.style.display='block'; } };
+  if(currentFile){ prev.src=URL.createObjectURL(currentFile); prev.style.display='block'; }
+}
+fileEl.onchange=()=>setImage(fileEl.files[0]);
+document.addEventListener('paste', e=>{
+  const items=(e.clipboardData||{}).items||[];
+  for(const it of items){ if(it.type && it.type.startsWith('image/')){ setImage(it.getAsFile()); break; } }
+});
 go.onclick=async()=>{
+  if(!currentFile) return;
   go.disabled=true; res.textContent='Classifying…'; rate.style.display='none'; thanks.style.display='none';
-  const fd=new FormData(); fd.append('file', fileEl.files[0]);
+  const fd=new FormData(); fd.append('file', currentFile);
   try{
     const r=await fetch('/predict',{method:'POST',body:fd});
     if(!r.ok){ res.textContent='Error: '+(await r.json()).detail; go.disabled=false; return; }
@@ -138,7 +147,7 @@ go.onclick=async()=>{
 async function sendFeedback(correct){
   yes.disabled=no.disabled=true;
   const fd=new FormData();
-  fd.append('file', fileEl.files[0]);
+  fd.append('file', currentFile);
   fd.append('predicted_caste', lastCaste);
   fd.append('correct_caste', correct ? lastCaste : (lastCaste==='queen'?'worker':'queen'));
   fd.append('consent', 'true');
