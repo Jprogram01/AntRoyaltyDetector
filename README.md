@@ -67,7 +67,8 @@ pip install -r requirements.txt
 ### 2. Download data
 
 ```bash
-python -m data.download_antweb --queens 2000 --workers 2000
+# AntWeb via the GBIF mirror; image CDN needs a cf_clearance cookie from a browser
+python -m data.download_gbif --queens 2000 --workers 2000 --cf-clearance "<cookie>"
 ```
 
 Images land in `data/raw/queen/` and `data/raw/worker/`.
@@ -75,18 +76,18 @@ Images land in `data/raw/queen/` and `data/raw/worker/`.
 ### 3. Train
 
 ```bash
-python train.py --raw-dir data/raw --epochs 20 --backbone efficientnet_b2
+python train.py --raw-dir data/raw --epochs 14 --backbone efficientnet_b2
 ```
 
-Best checkpoint saved to `checkpoints/best.pt`.
+Best checkpoint saved to `checkpoints/combined_final.pt`.
 
 ### 4. Serve locally
 
 ```bash
 uvicorn serve.app:app --reload
-# POST http://localhost:8000/predict  (multipart image upload)
+# GET  http://localhost:8000/          interactive demo page
+# POST http://localhost:8000/predict   (multipart image upload)
 # GET  http://localhost:8000/health
-# GET  http://localhost:8000/metrics
 ```
 
 ### 5. Docker
@@ -97,10 +98,10 @@ docker compose up --build
 
 Prometheus scrapes `/metrics` every 15 s — view at `http://localhost:9090`.
 
-### 6. Retrain on new data
+### 6. Retrain on feedback
 
 ```bash
-python retrain.py --checkpoint checkpoints/best.pt --raw-dir data/raw --epochs 5
+python retrain.py --checkpoint checkpoints/combined_final.pt --raw-dir data/raw --epochs 5
 ```
 
 ## Imbalance handling
@@ -121,21 +122,25 @@ pytest tests/ -v
 
 ```
 ├── data/
-│   ├── download_antweb.py   # AntWeb API scraper
-│   └── dataset.py           # Dataset + DataLoader factory
+│   ├── download_gbif.py       # GBIF/AntWeb downloader (verbatim caste, label filter)
+│   ├── download_hymenoptera.py# baseline ants-vs-bees set
+│   └── dataset.py             # Dataset + DataLoader factory
 ├── model/
-│   └── classifier.py        # EfficientNet-B2 + classification head
+│   └── classifier.py          # EfficientNet-B2 + classification head
 ├── serve/
-│   └── app.py               # FastAPI inference server
+│   ├── app.py                 # FastAPI inference server + demo UI
+│   ├── ood.py                 # "is it an ant?" out-of-distribution gate
+│   └── storage.py             # logs predictions/feedback to HF Datasets
 ├── tests/
-│   ├── test_model.py        # forward pass + save/load
-│   └── test_api.py          # endpoint smoke tests
-├── monitoring/
-│   └── prometheus.yml
-├── train.py                 # main training loop
-├── retrain.py               # fine-tune on new data
+│   ├── test_model.py          # forward pass + save/load
+│   └── test_api.py            # endpoint smoke tests
+├── monitoring/prometheus.yml
+├── train.py                   # main training loop
+├── retrain.py                 # fine-tune on feedback
+├── evaluate.py                # held-out + domain-sliced eval
 ├── Dockerfile
-└── docker-compose.yml
+├── docker-compose.yml
+└── DEPLOY.md                  # Hugging Face Spaces deploy guide
 ```
 
 ## Results
