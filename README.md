@@ -1,58 +1,64 @@
 ---
 title: Ant Royalty Detector
+emoji: 🐜
+colorFrom: purple
+colorTo: yellow
 sdk: docker
 app_port: 7860
+pinned: false
+license: mit
 ---
 
 # Ant Royalty Detector
 
-Binary image classifier that distinguishes **ant queens from workers** using transfer learning on AntWeb specimen photographs. Built as a production-grade ML Engineering portfolio project.
+Binary image classifier that distinguishes 1. Ants from non-ants and 2. Ant queens from workers using transfer learning on AntWeb & iNaturalist specimen photographs. Built as a production-grade ML Engineering portfolio project.
 
 > **Live demo:** this repo doubles as a [Hugging Face Space](https://huggingface.co) — the YAML header above configures it. Open the Space URL to upload an ant photo and get a queen/worker prediction in the browser.
 
-## Why this is interesting
+## Why?
 
-Queen/worker classification is understudied in the literature — existing ant datasets are mostly species-level or single-class "ant" detection. AntWeb is the only large-scale caste-labeled source, and the queen/worker split is heavily skewed toward workers. The engineering story is: **build the data pipeline, fix the imbalance, serve it properly**.
+Within the antkeeping world there is a common problem for new antkeepers: Correctly identifying if an ant is a queen ant. While there are physical traits that allow for more experienced antkeepers to quickly identify queen ants those can be hard to spot for beginners. The goal of this tool is to help newcomers to the antkeeping world in identifying queens.
+
+## Problems
+
+There were no datasets that classified ant caste, as well as a data imbalance problems in the available ant image datasets. This then meant a dataset had to be made manually by me. The data imbalance problems can cause problems in model training, but this can be mitigated during training by tactics such as class weighting.
+
+## AI Disclaimer
+
+The system design, data selection/labeling, class imbalance decisions, deployment were all decided and handled by me, but Claude Code wrote the code and implemented the solutions. Much of this README was also written by Claude Code. I wanted to develop an ML project from idea to deployment while also familiarizing myself with AI tools.
 
 ## Architecture
 
-End-to-end lifecycle: **build → package → deploy → serve → collect → retrain**.
-
 ```
- BUILD (local GPU)
-   GBIF mirror ──► data/download_gbif.py ──► data/dataset.py ──► train.py ──► combined_final.pt
-   (caste in DwC `sex`,   (verbatim de-contam,   (WeightedRandomSampler   (EfficientNet-B2,
-    Cloudflare CDN)        label-image filter)     + pos_weight)            2-phase fine-tune)
+ BUILD  (local, GPU)
+   GBIF mirror of AntWeb  +  field photos (iNaturalist)
+        │   caste in Darwin Core `sex`; images via Cloudflare CDN
+        ▼
+   data/download_gbif.py        # verbatim caste de-contamination, label-image filter
+        ▼
+   data/dataset.py              # WeightedRandomSampler + BCEWithLogitsLoss(pos_weight)
+        ▼
+   model/classifier.py          # EfficientNet-B2 backbone (timm) + 2-layer head
+        ▼
+   train.py                     # 2-phase: frozen backbone → full fine-tune (AMP)
+        ▼
+   checkpoints/combined_final.pt
 
- SHIP (git push, two remotes)
-   GitHub  ◄── source mirror (read-only)
-   HF Space ◄── push triggers Docker build  ── model shipped via Git LFS
+ SHIP  (git push — two remotes)
+   GitHub   ← source mirror (read-only)
+   HF Space ← push triggers a Docker build; model shipped via Git LFS
 
- RUN (Hugging Face Space, Docker container)
-   serve/app.py  FastAPI ── /predict ─┬─ caste classifier (EfficientNet-B2)
-                                      └─ serve/ood.py  "is it an ant?" gate (ImageNet B0)
-                 ── /feedback ── user rating + image (with consent)
-                 ── /health /metrics (Prometheus)
+ RUN  (Hugging Face Space — Docker container)
+   serve/app.py  FastAPI ─┬─ /predict   caste classifier (EfficientNet-B2)
+                          ├─ serve/ood.py  "is it an ant?" gate (ImageNet B0)
+                          ├─ /feedback  user rating + image (with consent)
+                          └─ /health · /metrics  (Prometheus)
 
- FLYWHEEL (persist → retrain)
-   /predict  ──► HF Dataset: ant-predictions   (metadata only — monitoring/drift)
-   /feedback ──► HF Dataset: ant-feedback      (image + corrected label)
-                      │
-                      └──► retrain.py (fine-tune) ──► evaluate.py (gate) ──► push ──► redeploy
+ FLYWHEEL  (continual maintenance)
+   /predict  → HF Dataset: ant-predictions   (metadata only — monitoring/drift)
+   /feedback → HF Dataset: ant-feedback       (image + corrected label)
+                    └→ retrain.py (fine-tune) → evaluate.py (gate) → redeploy
 ```
-
-**GitHub vs. Hugging Face:** GitHub is the read-only *source mirror*; the HF Space is the
-*running deployment*. A Space is itself a git repo — pushing to it triggers a Docker build &
-container run (git-push-to-deploy). The same local repo pushes to both remotes.
-
-**Docker:** the `Dockerfile` packages app + deps + model into one reproducible image that runs
-identically locally (`docker compose up`) and on HF. The Space's `README` YAML header
-(`sdk: docker`, `app_port: 7860`) configures it.
-
-**Continual maintenance:** predictions and user ratings persist to HF Datasets (Spaces have an
-ephemeral filesystem, so writes go to Dataset repos via `huggingface_hub.CommitScheduler`).
-`retrain.py` fine-tunes on accumulated feedback; `evaluate.py` gates the release with a
-domain-sliced check; redeploy closes the loop.
 
 ## Quickstart
 
@@ -175,7 +181,7 @@ EfficientNet-B2, 14 epochs, RTX 3050 Ti (4GB) with mixed-precision (AMP).
 | Queen P / R / F1 | 0.90 / 0.91 / 0.91 |
 | Worker P / R / F1 | 0.94 / 0.93 / 0.94 |
 
-The headline: **despite a 1.5:1 class imbalance, queen recall is 0.91** — the
+**despite a 1.5:1 class imbalance, queen recall is 0.91** — the
 `WeightedRandomSampler` keeps the model from neglecting the scarce class. Val
 AUC climbed 0.78 (frozen) → 0.90 (epoch 6 unfreeze) → 0.974 (final).
 
