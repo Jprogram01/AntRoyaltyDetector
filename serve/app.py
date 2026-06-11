@@ -11,10 +11,12 @@ GET  /metrics   — Prometheus metrics (via prometheus-fastapi-instrumentator)
 import io
 import os
 import time
+import uuid
 from pathlib import Path
+from urllib.parse import urlparse
 
 import torch
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from loguru import logger
 from PIL import Image
@@ -143,7 +145,8 @@ _LANDING_HTML = """<!doctype html>
     </div>
   </div>
   <footer>EfficientNet-B2 &middot; trained on AntWeb specimens and field images
-    &middot; <a href="/docs">API documentation</a></footer>
+    &middot; <a href="/docs">API documentation</a><br>
+    Anonymous usage (a random session id, no personal data) is logged to improve the tool.</footer>
 <script>
 const fileEl=document.getElementById('file'), go=document.getElementById('go'),
       res=document.getElementById('result'), prev=document.getElementById('preview'),
@@ -197,9 +200,27 @@ no.onclick=()=>sendFeedback(false);
 </body></html>"""
 
 
+def _ref_host(referer: str) -> str:
+    """Best-effort traffic source from the Referer header (host only)."""
+    try:
+        return (urlparse(referer).hostname or "")[:40]
+    except Exception:
+        return ""
+
+
 @app.get("/", response_class=HTMLResponse)
-async def landing():
-    return _LANDING_HTML
+async def landing(request: Request):
+    resp = HTMLResponse(_LANDING_HTML)
+    # Anonymous session id for unique-user estimation (random, no IP/PII).
+    if not request.cookies.get("sid"):
+        resp.set_cookie(
+            "sid", uuid.uuid4().hex[:16], max_age=31_536_000, samesite="lax"
+        )
+    # Optional campaign source: link as ...hf.space/?ref=reddit and it sticks.
+    ref = request.query_params.get("ref")
+    if ref:
+        resp.set_cookie("src", ref[:40], max_age=31_536_000, samesite="lax")
+    return resp
 
 
 @app.get("/health")
@@ -208,7 +229,7 @@ async def health():
 
 
 @app.post("/predict", response_model=PredictionResponse)
-async def predict(file: UploadFile = File(...)):
+async def predict(request: Request, file: UploadFile = File(...)):
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
 
@@ -239,7 +260,8 @@ async def predict(file: UploadFile = File(...)):
         f"latency={latency_ms:.1f}ms | file={file.filename}"
     )
 
-    # Monitoring log — metadata only, NO image (drift / volume / latency / OOD)
+    # Monitoring log — metadata only, NO image (drift / volume / latency / OOD).
+    # sid = anonymous session id (unique-user estimate); src = campaign source.
     storage.log_prediction(
         {
             "caste": caste,
@@ -250,6 +272,8 @@ async def predict(file: UploadFile = File(...)):
             "ant_likelihood": ant_likelihood,
             "img_w": img.width,
             "img_h": img.height,
+            "sid": request.cookies.get("sid", "none"),
+            "src": request.cookies.get("src") or _ref_host(request.headers.get("referer", "")),
         }
     )
 
@@ -265,6 +289,7 @@ async def predict(file: UploadFile = File(...)):
 
 @app.post("/feedback")
 async def feedback(
+    request: Request,
     file: UploadFile = File(...),
     predicted_caste: str = Form(...),
     correct_caste: str = Form(...),
@@ -289,6 +314,7 @@ async def feedback(
             "predicted_caste": predicted_caste,
             "correct_caste": correct_caste,
             "agreed": predicted_caste == correct_caste,
+            "sid": request.cookies.get("sid", "none"),
         },
     )
     return {"status": "thanks", "id": fb_id}
