@@ -21,30 +21,43 @@ Queen/worker classification is understudied in the literature — existing ant d
 
 ## Architecture
 
+End-to-end lifecycle: **build → package → deploy → serve → collect → retrain**.
+
 ```
-AntWeb API
-    │
-    ▼
-data/download_antweb.py          # paginated API pull, ~2k queens / ~2k workers
-    │
-    ▼
-data/dataset.py                  # WeightedRandomSampler + BCEWithLogitsLoss(pos_weight)
-    │
-    ▼
-model/classifier.py              # EfficientNet-B2 backbone (timm) + 2-layer head
-    │
-    ▼
-train.py                         # 2-phase training: frozen backbone → full fine-tune
-    │
-    ▼
-checkpoints/best.pt              # saved by best val AUC
-    │
-    ▼
-serve/app.py                     # FastAPI: POST /predict, GET /health, GET /metrics
-    │
-    ▼
-Docker + Prometheus               # containerized, scraped every 15s
+ BUILD (local GPU)
+   GBIF mirror ──► data/download_gbif.py ──► data/dataset.py ──► train.py ──► combined_final.pt
+   (caste in DwC `sex`,   (verbatim de-contam,   (WeightedRandomSampler   (EfficientNet-B2,
+    Cloudflare CDN)        label-image filter)     + pos_weight)            2-phase fine-tune)
+
+ SHIP (git push, two remotes)
+   GitHub  ◄── source mirror (read-only)
+   HF Space ◄── push triggers Docker build  ── model shipped via Git LFS
+
+ RUN (Hugging Face Space, Docker container)
+   serve/app.py  FastAPI ── /predict ─┬─ caste classifier (EfficientNet-B2)
+                                      └─ serve/ood.py  "is it an ant?" gate (ImageNet B0)
+                 ── /feedback ── user rating + image (with consent)
+                 ── /health /metrics (Prometheus)
+
+ FLYWHEEL (persist → retrain)
+   /predict  ──► HF Dataset: ant-predictions   (metadata only — monitoring/drift)
+   /feedback ──► HF Dataset: ant-feedback      (image + corrected label)
+                      │
+                      └──► retrain.py (fine-tune) ──► evaluate.py (gate) ──► push ──► redeploy
 ```
+
+**GitHub vs. Hugging Face:** GitHub is the read-only *source mirror*; the HF Space is the
+*running deployment*. A Space is itself a git repo — pushing to it triggers a Docker build &
+container run (git-push-to-deploy). The same local repo pushes to both remotes.
+
+**Docker:** the `Dockerfile` packages app + deps + model into one reproducible image that runs
+identically locally (`docker compose up`) and on HF. The Space's `README` YAML header
+(`sdk: docker`, `app_port: 7860`) configures it.
+
+**Continual maintenance:** predictions and user ratings persist to HF Datasets (Spaces have an
+ephemeral filesystem, so writes go to Dataset repos via `huggingface_hub.CommitScheduler`).
+`retrain.py` fine-tunes on accumulated feedback; `evaluate.py` gates the release with a
+domain-sliced check; redeploy closes the loop.
 
 ## Quickstart
 
