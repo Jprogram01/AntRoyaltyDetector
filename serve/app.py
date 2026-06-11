@@ -74,45 +74,66 @@ _LANDING_HTML = """<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ant Royalty Detector</title>
 <style>
-  :root { color-scheme: light dark; --muted:#888; --line:#8883; --bd:#8886; }
-  * { box-sizing:border-box; }
-  body { font-family: system-ui, -apple-system, sans-serif; max-width: 560px;
-         margin: 4rem auto; padding: 0 1.25rem; line-height: 1.55; }
-  h1 { font-size: 1.4rem; font-weight: 600; margin: 0 0 .25rem; letter-spacing: -.01em; }
-  .sub { color: var(--muted); margin: 0; font-size: .9rem; }
-  .card { border: 1px solid var(--bd); padding: 1.25rem; margin-top: 1.5rem; }
-  input[type=file] { font-size: .88rem; max-width: 100%; }
-  button { font: inherit; font-size: .88rem; padding: .45rem 1rem; border: 1px solid currentColor;
-           background: transparent; color: inherit; cursor: pointer; }
-  button:hover:not(:disabled) { background: #8882; }
-  button:disabled { opacity: .4; cursor: default; }
-  .hint { color: var(--muted); font-size: .82rem; margin-top: .5rem; }
-  #preview { max-width: 100%; margin-top: 1rem; display: none; border: 1px solid var(--line); }
-  #result { margin-top: 1.25rem; }
-  .caste { font-size: 1.5rem; font-weight: 600; letter-spacing: .03em; }
-  .meta { color: var(--muted); font-size: .85rem; margin-top: .15rem; }
-  .bar { height: 4px; background: var(--line); margin-top: .6rem; }
-  .bar > span { display:block; height:100%; background: currentColor; }
-  #rate { margin-top: 1.5rem; display:none; }
-  #rate .q { font-size: .9rem; margin-bottom: .5rem; }
-  .rbtn { margin-right: .5rem; }
-  .disclaimer { color: var(--muted); font-size: .75rem; margin-top: .65rem; max-width: 44ch; }
-  #thanks { color: var(--muted); font-size: .85rem; margin-top: .65rem; display:none; }
-  .notant { border: 1px solid var(--bd); padding: .6rem .75rem; margin-bottom: .85rem;
-            font-size: .86rem; color: var(--muted); }
-  footer { margin-top: 1.5rem; color: var(--muted); font-size: .8rem; }
-  footer a { color: inherit; }
+  :root {
+    --bg:#fafaf9; --surface:#fff; --ink:#1f2d33; --text:#3a4248; --muted:#76808a;
+    --line:#e4e3dd; --accent:#2c6e63; --accent-dark:#235850;
+    --queen:#9a6b1f; --worker:#2c6e63;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); line-height: 1.6;
+         font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+         max-width: 620px; margin: 0 auto; padding: 3rem 1.25rem; }
+  header { border-bottom: 1px solid var(--line); padding-bottom: 1.1rem; margin-bottom: 1.6rem; }
+  h1 { font-family: Georgia, "Times New Roman", serif; font-size: 1.8rem; color: var(--ink);
+       margin: 0; display: inline-block; border-bottom: 3px solid var(--accent); padding-bottom: .35rem; }
+  .tagline { color: var(--muted); margin: .75rem 0 0; font-size: .95rem; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+          box-shadow: 0 1px 3px rgba(0,0,0,.06); padding: 1.4rem; }
+  .row { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+  input[type=file] { font-size: .9rem; max-width: 100%; }
+  button { font: inherit; font-size: .9rem; cursor: pointer; border-radius: 4px; }
+  .primary { background: var(--accent); color: #fff; border: 1px solid var(--accent); padding: .5rem 1.1rem; }
+  .primary:hover:not(:disabled) { background: var(--accent-dark); border-color: var(--accent-dark); }
+  .primary:disabled { opacity: .45; cursor: default; }
+  .hint { color: var(--muted); font-size: .82rem; margin-top: .6rem; }
+  #preview { max-width: 100%; margin-top: 1rem; display: none; border: 1px solid var(--line); border-radius: 4px; }
+  #result { margin-top: 1.4rem; }
+  .caste { font-size: 1.6rem; font-weight: 700; letter-spacing: .02em; }
+  .caste.queen { color: var(--queen); } .caste.worker { color: var(--worker); }
+  .meta { color: var(--muted); font-size: .85rem; margin-top: .2rem; }
+  .bar { height: 6px; background: var(--line); border-radius: 3px; margin-top: .6rem; overflow: hidden; }
+  .bar > span { display: block; height: 100%; background: var(--accent); }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 1.4rem 0; }
+  #rate { display: none; }
+  #rate .q { font-size: .92rem; color: var(--ink); font-weight: 600; margin-bottom: .6rem; }
+  .rbtn { background: transparent; color: var(--accent); border: 1px solid var(--accent);
+          padding: .4rem .9rem; margin-right: .5rem; }
+  .rbtn:hover:not(:disabled) { background: var(--accent); color: #fff; }
+  .rbtn:disabled { opacity: .45; cursor: default; }
+  .disclaimer { color: var(--muted); font-size: .76rem; margin-top: .7rem; max-width: 46ch; }
+  #thanks { color: var(--accent); font-weight: 600; font-size: .86rem; margin-top: .7rem; display: none; }
+  .notant { background: #fdf6ec; border: 1px solid #e7c98a; color: #8a6516; border-radius: 4px;
+            padding: .65rem .8rem; margin-bottom: .9rem; font-size: .86rem; }
+  footer { border-top: 1px solid var(--line); margin-top: 1.8rem; padding-top: 1rem;
+           color: var(--muted); font-size: .82rem; }
+  footer a { color: var(--accent); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
 </style></head>
 <body>
-  <h1>Ant Royalty Detector</h1>
-  <p class="sub">Classifies an ant photo as queen or worker.</p>
+  <header>
+    <h1>Ant Royalty Detector</h1>
+    <p class="tagline">A computer-vision classifier that distinguishes ant queens from workers.</p>
+  </header>
   <div class="card">
-    <input type="file" id="file" accept="image/*">
-    <button id="go" disabled>Classify</button>
+    <div class="row">
+      <input type="file" id="file" accept="image/*">
+      <button id="go" class="primary" disabled>Classify</button>
+    </div>
     <div class="hint">or paste an image (Ctrl/Cmd-V)</div>
     <img id="preview">
     <div id="result"></div>
     <div id="rate">
+      <hr>
       <div class="q">Was this correct?</div>
       <button class="rbtn" id="yes">Correct</button>
       <button class="rbtn" id="no">Incorrect</button>
@@ -121,7 +142,8 @@ _LANDING_HTML = """<!doctype html>
       <div id="thanks">Saved. Thanks for the feedback.</div>
     </div>
   </div>
-  <footer>EfficientNet-B2 · AntWeb + field images · <a href="/docs">API</a></footer>
+  <footer>EfficientNet-B2 &middot; trained on AntWeb specimens and field images
+    &middot; <a href="/docs">API documentation</a></footer>
 <script>
 const fileEl=document.getElementById('file'), go=document.getElementById('go'),
       res=document.getElementById('result'), prev=document.getElementById('preview'),
@@ -151,7 +173,7 @@ go.onclick=async()=>{
       `<div class="notant">This does not look like an ant (arthropod score `+
       `${(d.ant_likelihood*100).toFixed(0)}%); the prediction below is probably unreliable.</div>`;
     res.innerHTML=warn+
-      `<div class="caste">${d.caste.toUpperCase()}</div>`+
+      `<div class="caste ${d.caste}">${d.caste.toUpperCase()}</div>`+
       `<div class="meta">confidence ${(d.confidence*100).toFixed(1)}% · P(queen) ${pct}%</div>`+
       `<div class="bar"><span style="width:${pct}%"></span></div>`+
       `<div class="meta">${d.latency_ms.toFixed(0)} ms · arthropod ${(d.ant_likelihood*100).toFixed(0)}%</div>`;
