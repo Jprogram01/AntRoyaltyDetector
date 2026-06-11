@@ -28,10 +28,16 @@ PREDICTIONS_DATASET = os.getenv("PREDICTIONS_DATASET", "Jprogram01/ant-predictio
 FEEDBACK_DATASET = os.getenv("FEEDBACK_DATASET", "Jprogram01/ant-feedback")
 COMMIT_EVERY_MIN = int(os.getenv("COMMIT_EVERY_MIN", "5"))
 
+# Unique per-process suffix. Spaces have an ephemeral /tmp that's wiped on every
+# restart; a FIXED metadata filename would be recreated empty each boot and the
+# CommitScheduler would overwrite the remote copy, losing all prior labels. A
+# per-session filename is append-only across restarts — files accumulate, nothing
+# is clobbered. (Read the dataset by globbing data/metadata-*.jsonl.)
+_SESSION = uuid.uuid4().hex[:12]
 _PRED_DIR = Path("/tmp/ant_pred_log")
 _FB_DIR = Path("/tmp/ant_feedback")
-_PRED_FILE = _PRED_DIR / "predictions.jsonl"
-_FB_FILE = _FB_DIR / "metadata.jsonl"
+_PRED_FILE = _PRED_DIR / f"predictions-{_SESSION}.jsonl"
+_FB_FILE = _FB_DIR / f"metadata-{_SESSION}.jsonl"
 
 _pred_scheduler = None
 _fb_scheduler = None
