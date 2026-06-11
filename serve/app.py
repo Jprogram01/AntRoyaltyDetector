@@ -74,48 +74,54 @@ _LANDING_HTML = """<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ant Royalty Detector</title>
 <style>
-  :root { color-scheme: light dark; }
-  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 3rem auto;
-         padding: 0 1rem; line-height: 1.5; }
-  h1 { margin-bottom: .25rem; }
-  .sub { color: #888; margin-top: 0; }
-  .card { border: 1px solid #8884; border-radius: 12px; padding: 1.5rem; margin-top: 1.5rem; }
-  button { font-size: 1rem; padding: .6rem 1.2rem; border-radius: 8px; border: 0;
-           background: #6d28d9; color: #fff; cursor: pointer; }
-  button:disabled { opacity: .5; cursor: default; }
-  #result { margin-top: 1.25rem; font-size: 1.1rem; }
-  .caste { font-size: 1.6rem; font-weight: 700; }
-  .queen { color: #d97706; } .worker { color: #2563eb; }
-  img#preview { max-width: 100%; border-radius: 8px; margin-top: 1rem; display: none; }
-  .bar { height: 10px; background: #8883; border-radius: 5px; overflow: hidden; margin-top:.5rem; }
-  .bar > span { display:block; height:100%; background:#6d28d9; }
-  #rate { margin-top: 1.25rem; display:none; }
-  #rate .q { font-size:.95rem; margin-bottom:.5rem; }
-  .rbtn { background:#0000; border:1px solid #8886; color:inherit; margin-right:.5rem; }
-  .disclaimer { font-size:.78rem; color:#999; margin-top:.6rem; }
-  #thanks { color:#16a34a; font-weight:600; margin-top:.5rem; display:none; }
-  .notant { background:#f59e0b22; border:1px solid #f59e0b88; color:#b45309;
-            border-radius:8px; padding:.6rem .8rem; margin-bottom:.75rem; font-size:.95rem; }
+  :root { color-scheme: light dark; --muted:#888; --line:#8883; --bd:#8886; }
+  * { box-sizing:border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; max-width: 560px;
+         margin: 4rem auto; padding: 0 1.25rem; line-height: 1.55; }
+  h1 { font-size: 1.4rem; font-weight: 600; margin: 0 0 .25rem; letter-spacing: -.01em; }
+  .sub { color: var(--muted); margin: 0; font-size: .9rem; }
+  .card { border: 1px solid var(--bd); padding: 1.25rem; margin-top: 1.5rem; }
+  input[type=file] { font-size: .88rem; max-width: 100%; }
+  button { font: inherit; font-size: .88rem; padding: .45rem 1rem; border: 1px solid currentColor;
+           background: transparent; color: inherit; cursor: pointer; }
+  button:hover:not(:disabled) { background: #8882; }
+  button:disabled { opacity: .4; cursor: default; }
+  .hint { color: var(--muted); font-size: .82rem; margin-top: .5rem; }
+  #preview { max-width: 100%; margin-top: 1rem; display: none; border: 1px solid var(--line); }
+  #result { margin-top: 1.25rem; }
+  .caste { font-size: 1.5rem; font-weight: 600; letter-spacing: .03em; }
+  .meta { color: var(--muted); font-size: .85rem; margin-top: .15rem; }
+  .bar { height: 4px; background: var(--line); margin-top: .6rem; }
+  .bar > span { display:block; height:100%; background: currentColor; }
+  #rate { margin-top: 1.5rem; display:none; }
+  #rate .q { font-size: .9rem; margin-bottom: .5rem; }
+  .rbtn { margin-right: .5rem; }
+  .disclaimer { color: var(--muted); font-size: .75rem; margin-top: .65rem; max-width: 44ch; }
+  #thanks { color: var(--muted); font-size: .85rem; margin-top: .65rem; display:none; }
+  .notant { border: 1px solid var(--bd); padding: .6rem .75rem; margin-bottom: .85rem;
+            font-size: .86rem; color: var(--muted); }
+  footer { margin-top: 1.5rem; color: var(--muted); font-size: .8rem; }
+  footer a { color: inherit; }
 </style></head>
 <body>
-  <h1>🐜 Ant Royalty Detector</h1>
-  <p class="sub">Upload an ant photo — the model predicts <b>queen</b> vs <b>worker</b>.</p>
+  <h1>Ant Royalty Detector</h1>
+  <p class="sub">Classifies an ant photo as queen or worker.</p>
   <div class="card">
     <input type="file" id="file" accept="image/*">
     <button id="go" disabled>Classify</button>
-    <div class="sub" style="margin-top:.4rem">…or paste an image (Ctrl/⌘+V)</div>
+    <div class="hint">or paste an image (Ctrl/Cmd-V)</div>
     <img id="preview">
     <div id="result"></div>
     <div id="rate">
-      <div class="q">Was this right?</div>
-      <button class="rbtn" id="yes">👍 Correct</button>
-      <button class="rbtn" id="no">👎 It's the other one</button>
+      <div class="q">Was this correct?</div>
+      <button class="rbtn" id="yes">Correct</button>
+      <button class="rbtn" id="no">Incorrect</button>
       <div class="disclaimer">By rating, you agree your uploaded image and label
         may be stored and used to improve the model.</div>
-      <div id="thanks">✓ Thanks — saved for future training!</div>
+      <div id="thanks">Saved. Thanks for the feedback.</div>
     </div>
   </div>
-  <p class="sub">EfficientNet-B2 · trained on AntWeb + field images · <a href="/docs">API docs</a></p>
+  <footer>EfficientNet-B2 · AntWeb + field images · <a href="/docs">API</a></footer>
 <script>
 const fileEl=document.getElementById('file'), go=document.getElementById('go'),
       res=document.getElementById('result'), prev=document.getElementById('preview'),
@@ -142,14 +148,13 @@ go.onclick=async()=>{
     const d=await r.json(); const pct=(d.queen_probability*100).toFixed(1);
     lastCaste=d.caste;
     const warn = d.likely_ant ? '' :
-      `<div class="notant">⚠️ This doesn't look like an ant (arthropod score `+
-      `${(d.ant_likelihood*100).toFixed(0)}%). The caste prediction below is `+
-      `probably unreliable.</div>`;
+      `<div class="notant">This does not look like an ant (arthropod score `+
+      `${(d.ant_likelihood*100).toFixed(0)}%); the prediction below is probably unreliable.</div>`;
     res.innerHTML=warn+
-      `<div class="caste ${d.caste}">${d.caste.toUpperCase()}</div>`+
-      `confidence ${(d.confidence*100).toFixed(1)}% · P(queen)=${pct}%`+
+      `<div class="caste">${d.caste.toUpperCase()}</div>`+
+      `<div class="meta">confidence ${(d.confidence*100).toFixed(1)}% · P(queen) ${pct}%</div>`+
       `<div class="bar"><span style="width:${pct}%"></span></div>`+
-      `<div class="sub">${d.latency_ms.toFixed(0)} ms · arthropod ${(d.ant_likelihood*100).toFixed(0)}%</div>`;
+      `<div class="meta">${d.latency_ms.toFixed(0)} ms · arthropod ${(d.ant_likelihood*100).toFixed(0)}%</div>`;
     yes.disabled=no.disabled=false; rate.style.display='block';
   }catch(e){ res.textContent='Request failed: '+e; }
   go.disabled=false;
