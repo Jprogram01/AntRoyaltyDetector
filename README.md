@@ -23,9 +23,11 @@ Within the antkeeping world there is a common problem for new antkeepers: Correc
 
 There were no datasets that classified ant caste, as well as a data imbalance problems in the available ant image datasets. This then meant a dataset had to be made manually by me. The data imbalance problems can cause problems in model training, but this can be mitigated during training by tactics such as class weighting.
 
-## AI Disclaimer
+## AI Disclaimer 
 
-The system design, data selection/labeling, class imbalance decisions, deployment were all decided and handled by me, but Claude Code wrote the code and implemented the solutions. Much of this README was also written by Claude Code. I wanted to develop an ML project from idea to deployment while also familiarizing myself with AI tools.
+The system design, data selection/labeling, class imbalance decisions, deployment were all decided and handled by me, but Claude Code wrote the code and implemented the solutions. Much of this README was also written by Claude Code. I wanted to develop an ML project from idea to deployment while also familiarizing myself with AI tools. 
+
+
 
 ## Architecture
 
